@@ -102,6 +102,7 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
 
     protected void onInputChanged() {}
 
+    /**
     @EventHandler
     public void onClickEvent(InventoryClickEvent event) {
         if (!(event.getView().getTopInventory().getHolder(false) instanceof InventoryModel)) return;
@@ -155,6 +156,91 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
 
 
             this.scheduleInputUpdate();
+            return;
+        }
+
+        event.setCancelled(false);
+    }
+     **/
+    @EventHandler
+    public void onClickEvent(InventoryClickEvent event) {
+        if (!(event.getView().getTopInventory().getHolder(false) instanceof InventoryModel)) return;
+
+        int rawSlot = event.getRawSlot();
+        int topSize = event.getView().getTopInventory().getSize();
+        boolean clickedTop = rawSlot < topSize;
+
+        if (event.getClick().isShiftClick()) {
+            if (!clickedTop) {
+                event.setCancelled(true);
+
+                ItemStack moving = event.getCurrentItem();
+                if (this.isAir(moving)) return;
+
+                ItemStack clone = moving.clone();
+                this.moveToInput(event.getView().getTopInventory(), clone);
+
+                int remaining = clone.getAmount();
+                if (remaining <= 0) {
+                    event.setCurrentItem(null);
+                } else {
+                    moving.setAmount(remaining);
+                    event.setCurrentItem(moving);
+                }
+
+                this.scheduleInputUpdate();
+                return;
+            }
+
+            int slot = event.getSlot();
+
+            // só permite shift remover se for input slot
+            if (!this.isInputSlot(slot)) {
+                event.setCancelled(true);
+                return;
+            }
+
+            ItemStack item = event.getCurrentItem();
+            if (this.isAir(item)) return;
+
+            event.setCancelled(true);
+
+            HashMap<Integer, ItemStack> leftover =
+                    event.getWhoClicked().getInventory().addItem(item);
+
+            if (leftover.isEmpty()) {
+                event.setCurrentItem(null);
+            } else {
+                event.setCurrentItem(leftover.values().iterator().next());
+            }
+
+            this.scheduleInputUpdate();
+            return;
+        }
+
+        if (clickedTop) {
+            int slot = event.getSlot();
+
+            if (this.isInputSlot(slot)) {
+                if (this.isBlockedAction(event.getAction())) {
+                    event.setCancelled(true);
+                    return;
+                }
+
+                ItemStack cursor = event.getCursor();
+                if (!this.canPlaceInSlot(slot, cursor)) {
+                    event.setCancelled(true);
+                    return;
+                }
+
+                event.setCancelled(false);
+                this.scheduleInputUpdate();
+                return;
+            }
+
+            // slots normais com ação custom
+            event.setCancelled(true);
+            this.runActionIfExists(event);
             return;
         }
 
