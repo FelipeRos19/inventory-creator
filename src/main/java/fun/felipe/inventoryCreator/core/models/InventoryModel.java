@@ -16,10 +16,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
 
 public abstract class InventoryModel implements InventoryHolder, Listener {
@@ -36,7 +33,7 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
         Bukkit.getServer().getPluginManager().registerEvents(this, InventoryCreator.getInstance().getPlugin());
         this.items = new HashMap<>();
         this.actions = new HashMap<>();
-        this.inputSlots = new HashSet<>();
+        this.inputSlots = new LinkedHashSet<>();
         this.inputFilters = new HashMap<>();
     }
 
@@ -45,7 +42,7 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
         Bukkit.getServer().getPluginManager().registerEvents(this, InventoryCreator.getInstance().getPlugin());
         this.items = new HashMap<>();
         this.actions = new HashMap<>();
-        this.inputSlots = new HashSet<>();
+        this.inputSlots = new LinkedHashSet<>();
         this.inputFilters = new HashMap<>();
     }
 
@@ -102,66 +99,6 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
 
     protected void onInputChanged() {}
 
-    /**
-    @EventHandler
-    public void onClickEvent(InventoryClickEvent event) {
-        if (!(event.getView().getTopInventory().getHolder(false) instanceof InventoryModel)) return;
-        event.setCancelled(true);
-
-
-        int rawSlot = event.getRawSlot();
-        int topSize = event.getView().getTopInventory().getSize();
-        boolean clickedTop = rawSlot < topSize;
-
-        if (clickedTop) {
-            int slot = event.getSlot();
-
-            if (this.isInputSlot(slot)) {
-                if (this.isBlockedAction(event.getAction())) {
-                    event.setCancelled(true);
-                    return;
-                }
-
-                ItemStack cursor = event.getCursor();
-                if (!this.canPlaceInSlot(slot, cursor)) {
-                    event.setCancelled(true);
-                    return;
-                }
-
-                event.setCancelled(false);
-                this.scheduleInputUpdate();
-                return;
-            }
-
-            this.runActionIfExists(event);
-            return;
-        }
-
-        if (event.getClick().isShiftClick()) {
-            event.setCancelled(true);
-
-            ItemStack moving = event.getCurrentItem();
-            if (this.isAir(moving)) return;
-
-            ItemStack clone = moving.clone();
-            this.moveToInput(event.getView().getTopInventory(), clone);
-
-            int remaining = clone.getAmount();
-            if (remaining <= 0) {
-                event.setCurrentItem(null);
-            } else {
-                moving.setAmount(remaining);
-                event.setCurrentItem(moving);
-            }
-
-
-            this.scheduleInputUpdate();
-            return;
-        }
-
-        event.setCancelled(false);
-    }
-     **/
     @EventHandler
     public void onClickEvent(InventoryClickEvent event) {
         if (!(event.getView().getTopInventory().getHolder(false) instanceof InventoryModel)) return;
@@ -238,7 +175,6 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
                 return;
             }
 
-            // slots normais com ação custom
             event.setCancelled(true);
             this.runActionIfExists(event);
             return;
@@ -298,7 +234,23 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
         if (this.isAir(itemStack)) return;
 
         for (int slot : this.inputSlots) {
-            if (!canPlaceInSlot(slot, itemStack)) continue;
+            if (!this.canPlaceInSlot(slot, itemStack)) continue;
+
+            ItemStack current = topInventory.getItem(slot);
+            if (!this.isAir(current)) continue;
+
+            int move = Math.min(itemStack.getAmount(), itemStack.getMaxStackSize());
+            ItemStack placed = itemStack.clone();
+            placed.setAmount(move);
+
+            topInventory.setItem(slot, placed);
+            itemStack.setAmount(itemStack.getAmount() - move);
+
+            if (itemStack.getAmount() <= 0) return;
+        }
+
+        for (int slot : this.inputSlots) {
+            if (!this.canPlaceInSlot(slot, itemStack)) continue;
 
             ItemStack current = topInventory.getItem(slot);
             if (this.isAir(current)) continue;
@@ -313,21 +265,6 @@ public abstract class InventoryModel implements InventoryHolder, Listener {
             itemStack.setAmount(itemStack.getAmount() - move);
 
             topInventory.setItem(slot, current);
-            if (itemStack.getAmount() <= 0) return;
-        }
-
-        for (int slot : this.inputSlots) {
-            if (!this.canPlaceInSlot(slot, itemStack)) continue;
-
-            ItemStack current = topInventory.getItem(slot);
-            if (!this.isAir(current)) continue;
-
-            int move = Math.min(itemStack.getAmount(), itemStack.getMaxStackSize());
-            ItemStack placed = itemStack.clone();
-            placed.setAmount(move);
-
-            topInventory.setItem(slot, placed);
-            itemStack.setAmount(itemStack.getAmount() - move);
 
             if (itemStack.getAmount() <= 0) return;
         }
